@@ -1,0 +1,7 @@
+# build directory
+build
+
+# bin directory for installed binaries
+bin
+
+
