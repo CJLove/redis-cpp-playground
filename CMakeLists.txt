@@ -44,3 +44,7 @@ find_library(REDIS_PLUS_PLUS_LIB redis++)
 find_package(Threads)
 
 add_subdirectory(hash)
+
+add_subdirectory(zset)
+
+add_subdirectory(scheduler)
