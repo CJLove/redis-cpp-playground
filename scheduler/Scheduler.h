@@ -1,23 +1,22 @@
 #pragma once
 
+#include "Dispatcher.h"
+#include "Worker.h"
 #include <atomic>
+#include <memory>
 #include <spdlog/spdlog.h>
 #include <sw/redis++/redis++.h>
 #include <thread>
 
 class Scheduler {
 public:
-    Scheduler(sw::redis::Redis &redis, const std::string &schedulerKey);
+    Scheduler(sw::redis::Redis &redis, const std::string &keyPrefix, bool dispatcher = true, bool worker = true);
 
     virtual ~Scheduler();
 
     void scheduleEvent(const std::string &eventId, uint32_t type, uint32_t interval);
 
 private:
-    void Dispatcher();
-
-    void Worker();
-
     sw::redis::Redis &m_redis;
 
     std::shared_ptr<spdlog::logger> m_logger;
@@ -28,7 +27,7 @@ private:
 
     std::atomic_bool m_running;
 
-    std::thread m_dispatcher;
+    std::unique_ptr<Dispatcher> m_dispatcher;
 
-    std::thread m_worker;
+    std::unique_ptr<Worker> m_worker;
 };

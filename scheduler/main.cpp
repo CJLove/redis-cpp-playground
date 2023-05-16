@@ -16,7 +16,7 @@ std::atomic_bool running = true;
 
 void usage() {
     std::cerr << "Usage\n"
-              << "scheduler [-h <redisHost> ][-p <redisPort>][-e <redisAuthEnvVar>][-n <name> ][-l <logLevel>]\n";
+              << "scheduler [-h <redisHost> ][-p <redisPort>][-e <redisAuthEnvVar>][-n <name> ][-l <logLevel>][-d][-w]\n";
 
 }
 
@@ -35,9 +35,11 @@ int main(int argc, char**argv)
     uint16_t redisPort = 6379;
     std::string redisAuthEnvVar ("REDIS_PASSWORD");
     std::string name = "client1";
+    bool dispatcher = false;
+    bool worker = false;
     int c;
 
-    while ((c = getopt(argc,argv, "h:p:e:l:n:?")) != EOF) {
+    while ((c = getopt(argc,argv, "h:p:e:l:n:dw?")) != EOF) {
         switch (c) {
             case 'h':
                 redisHost = optarg;
@@ -50,6 +52,12 @@ int main(int argc, char**argv)
                 break;
             case 'n':
                 name = optarg;
+                break;
+            case 'd':
+                dispatcher = true;
+                break;
+            case 'w':
+                worker = true;
                 break;
             case 'l':
                 logLevel = std::stoi(optarg);
@@ -86,7 +94,7 @@ int main(int argc, char**argv)
         poolOptions.size = 3;
 
         auto redis = Redis(options, poolOptions);
-        Scheduler scheduler(redis,"scheduler");
+        Scheduler scheduler(redis,"scheduler",dispatcher,worker);
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         uint32_t eventCount = 0; 
