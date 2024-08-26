@@ -34,6 +34,7 @@ int main(int argc, char**argv)
     std::string redisHost ("127.0.0.1");
     uint16_t redisPort = 6379;
     std::string redisAuthEnvVar ("REDIS_PASSWORD");
+    bool doAuth = false;
     int c;
 
     while ((c = getopt(argc,argv, "h:p:e:l:?")) != EOF) {
@@ -46,6 +47,7 @@ int main(int argc, char**argv)
                 break;
             case 'e':
                 redisAuthEnvVar = optarg;
+                doAuth = true;
                 break;
             case 'l':
                 logLevel = std::stoi(optarg);
@@ -64,14 +66,17 @@ int main(int argc, char**argv)
         ConnectionOptions options;
         options.host = redisHost;
         options.port = redisPort;
-        auto passwd = getenv(redisAuthEnvVar.c_str());
-        if (!passwd) {
-            logger->error("Unable to get auth password");
-            exit(1);
+        if (doAuth) {
+            auto passwd = getenv(redisAuthEnvVar.c_str());
+            if (!passwd) {
+                logger->error("Unable to get auth password");
+                exit(1);
+            }
+            options.password = passwd; 
         }
-        options.password = passwd; 
 
-        auto redis = Redis(options);
+//        auto redis = Redis(options);
+        auto redis = RedisCluster(options);
 
         std::map<std::string, double> s = {
             { "evt1", 1 },

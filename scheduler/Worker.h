@@ -7,14 +7,14 @@
 
 class Worker {
 public:
-    Worker(sw::redis::Redis &redis, const std::string &keyPrefix);
+    Worker(sw::redis::RedisCluster &redis, const std::string &keyPrefix);
 
     virtual ~Worker();
 
 private:
     void run();
     
-    sw::redis::Redis &m_redis;
+    sw::redis::RedisCluster &m_redis;
 
     std::shared_ptr<spdlog::logger> m_logger;
 

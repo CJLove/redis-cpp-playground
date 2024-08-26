@@ -1,11 +1,11 @@
 #include "Dispatcher.h"
 
 
-Dispatcher::Dispatcher(sw::redis::Redis &redis, const std::string &keyPrefix):
+Dispatcher::Dispatcher(sw::redis::RedisCluster &redis, const std::string &keyPrefix):
     m_redis(redis),
     m_logger(spdlog::get("scheduler")),
-    m_schedulerKey(keyPrefix+"Zset"),
-    m_queueKey(keyPrefix+"Queue"),
+    m_schedulerKey(keyPrefix+"Zset{sched}"),
+    m_queueKey(keyPrefix+"Queue{sched}"),
     m_running(false),
     m_dispatcher(std::thread(&Dispatcher::run, this))
 {
@@ -26,7 +26,7 @@ Dispatcher::run()
     m_running = true;
     m_logger->info("Starting Dispatcher thread");
 
-    auto tx = m_redis.transaction();
+    auto tx = m_redis.transaction(m_schedulerKey);
     auto txRedis = tx.redis();
 
     while (m_running.load())
@@ -50,7 +50,7 @@ Dispatcher::run()
         } catch (const sw::redis::WatchError &err) {
             continue;
         } catch (const sw::redis::Error &err) {
-            m_logger->error("Exception {}", err.what());
+            m_logger->error("Dispatcher exception {}", err.what());
         }
     }
     m_logger->info("Exiting Dispatcher thread");

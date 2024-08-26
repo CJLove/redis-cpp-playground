@@ -10,14 +10,14 @@
 
 class Scheduler {
 public:
-    Scheduler(sw::redis::Redis &redis, const std::string &keyPrefix, bool dispatcher = true, bool worker = true);
+    Scheduler(sw::redis::RedisCluster &redis, const std::string &keyPrefix, bool dispatcher = true, bool worker = true);
 
     virtual ~Scheduler();
 
     void scheduleEvent(const std::string &eventId, uint32_t type, uint32_t interval);
 
 private:
-    sw::redis::Redis &m_redis;
+    sw::redis::RedisCluster &m_redis;
 
     std::shared_ptr<spdlog::logger> m_logger;
 

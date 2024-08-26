@@ -1,11 +1,11 @@
 #include "Scheduler.h"
 
 
-Scheduler::Scheduler(sw::redis::Redis &redis, const std::string &keyPrefix, bool dispatcher, bool worker):
+Scheduler::Scheduler(sw::redis::RedisCluster &redis, const std::string &keyPrefix, bool dispatcher, bool worker):
     m_redis(redis),
     m_logger(spdlog::get("scheduler")),
-    m_schedulerKey(keyPrefix+"Zset"),
-    m_queueKey(keyPrefix+"Queue"),
+    m_schedulerKey(keyPrefix+"Zset{sched}"),
+    m_queueKey(keyPrefix+"Queue{sched}"),
     m_running(false),
     m_dispatcher(nullptr),
     m_worker(nullptr)

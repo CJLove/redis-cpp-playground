@@ -1,10 +1,10 @@
 #include "Worker.h"
 
-Worker::Worker(sw::redis::Redis &redis, const std::string &keyPrefix):
+Worker::Worker(sw::redis::RedisCluster &redis, const std::string &keyPrefix):
     m_redis(redis),
     m_logger(spdlog::get("scheduler")),
-    m_schedulerKey(keyPrefix+"Zset"),
-    m_queueKey(keyPrefix+"Queue"),
+    m_schedulerKey(keyPrefix+"Zset{sched}"),
+    m_queueKey(keyPrefix+"Queue{sched}"),
     m_running(false),
     m_worker(std::thread(&Worker::run, this))
 {
