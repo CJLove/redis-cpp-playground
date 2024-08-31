@@ -33,10 +33,13 @@ int main(int argc, char**argv)
     int logLevel = spdlog::level::trace;
     std::string redisHost ("127.0.0.1");
     uint16_t redisPort = 6379;
+    std::vector<uint16_t> sentinelPorts;
+    int conSize = 5;
     std::string redisAuthEnvVar ("REDIS_PASSWORD");
+    bool doAuth = false;
     int c;
 
-    while ((c = getopt(argc,argv, "h:p:e:l:?")) != EOF) {
+    while ((c = getopt(argc,argv, "h:p:e:l:s:c:?")) != EOF) {
         switch (c) {
             case 'h':
                 redisHost = optarg;
@@ -46,6 +49,13 @@ int main(int argc, char**argv)
                 break;
             case 'e':
                 redisAuthEnvVar = optarg;
+                doAuth = true;
+                break;
+            case 's':
+                sentinelPorts.push_back(static_cast<uint16_t>(std::stoi(optarg)));
+                break;
+            case 'c':
+                conSize = static_cast<int>(std::stoi(optarg));
                 break;
             case 'l':
                 logLevel = std::stoi(optarg);
@@ -61,17 +71,43 @@ int main(int argc, char**argv)
     spdlog::set_level(static_cast<spdlog::level::level_enum>(logLevel));
 
     try {
+        SentinelOptions sentinelOptions;
         ConnectionOptions options;
-        options.host = redisHost;
-        options.port = redisPort;
-        auto passwd = getenv(redisAuthEnvVar.c_str());
-        if (!passwd) {
-            logger->error("Unable to get auth password");
-            exit(1);
+        std::shared_ptr<Sentinel> sentinel;
+        std::shared_ptr<Redis> redis;
+        ConnectionPoolOptions poolOptions;
+        poolOptions.size = conSize;
+        if (doAuth) {
+            auto passwd = getenv(redisAuthEnvVar.c_str());
+            if (!passwd) {
+                logger->error("Unable to get auth password");
+                exit(1);
+            }
+            options.password = passwd;
         }
-        options.password = passwd; 
 
-        auto redis = Redis(options);
+        if (sentinelPorts.size()) {
+            // Connect to Sentinel
+            for (const auto &port: sentinelPorts) {
+                sentinelOptions.nodes.push_back({redisHost, port});
+            }
+            sentinelOptions.connect_timeout = std::chrono::milliseconds(500);
+            sentinelOptions.socket_timeout = std::chrono::milliseconds(500);
+
+            sentinel = std::make_shared<Sentinel>(sentinelOptions);
+
+
+            options.connect_timeout = std::chrono::milliseconds(500);
+            options.socket_timeout = std::chrono::milliseconds(500);
+
+            redis = std::make_shared<Redis>(sentinel, "mymaster", Role::MASTER, options, poolOptions);
+        } else {
+            // Connect to Redis master
+            options.host = redisHost;
+            options.port = redisPort;
+
+            redis = std::make_shared<Redis>(options, poolOptions);
+        }
 
         std::map<std::string, double> s = {
             { "evt1", 1 },
@@ -81,28 +117,28 @@ int main(int argc, char**argv)
             { "evt5", 9 },
         };
 
-        redis.zadd("zset:1", "evt0", 0 );
+        redis->zadd("zset:1", "evt0", 0 );
 
-        auto count = redis.zadd("zset:1", s.begin(), s.end());
+        auto count = redis->zadd("zset:1", s.begin(), s.end());
 
         logger->info("zadd() added {} elements", count);
 
-        auto rank = redis.zrank("zset:1", "evt2");
+        auto rank = redis->zrank("zset:1", "evt2");
         if (rank) {
            logger->info("zrank(evt2) = {}",*rank);
         }
-        auto score = redis.zscore("zset:1", "evt2");
+        auto score = redis->zscore("zset:1", "evt2");
         if (score) {
             logger->info("zscore(evt2) = {}", *score);
         }
 
         std::vector<std::pair<std::string, double>> zset_result;
-        redis.zrangebyscore("zset:1", UnboundedInterval<double>{}, std::back_inserter(zset_result));
+        redis->zrangebyscore("zset:1", UnboundedInterval<double>{}, std::back_inserter(zset_result));
         dumpZset("Unbounded range", logger,zset_result);
 
         zset_result.clear();
 
-        redis.zrangebyscore("zset:1", BoundedInterval<double>(5.0, 6, BoundType::RIGHT_OPEN), std::back_inserter(zset_result));
+        redis->zrangebyscore("zset:1", BoundedInterval<double>(5.0, 6, BoundType::RIGHT_OPEN), std::back_inserter(zset_result));
         dumpZset("Bounded range", logger, zset_result);
 
 

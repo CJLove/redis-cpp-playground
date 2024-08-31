@@ -33,13 +33,16 @@ int main(int argc, char**argv)
     int logLevel = spdlog::level::trace;
     std::string redisHost ("127.0.0.1");
     uint16_t redisPort = 6379;
+    std::vector<uint16_t> sentinelPorts;
     std::string redisAuthEnvVar ("REDIS_PASSWORD");
+    bool doAuth = false;
+    int conSize = 5;
     std::string name = "client1";
     bool dispatcher = false;
     bool worker = false;
     int c;
 
-    while ((c = getopt(argc,argv, "h:p:e:l:n:dw?")) != EOF) {
+    while ((c = getopt(argc,argv, "h:p:e:l:n:s:c:dw?")) != EOF) {
         switch (c) {
             case 'h':
                 redisHost = optarg;
@@ -49,6 +52,13 @@ int main(int argc, char**argv)
                 break;
             case 'e':
                 redisAuthEnvVar = optarg;
+                doAuth = true;
+                break;
+            case 's':
+                sentinelPorts.push_back(static_cast<uint16_t>(std::stoi(optarg)));
+                break;
+            case 'c':
+                conSize = static_cast<int>(std::stoi(optarg));
                 break;
             case 'n':
                 name = optarg;
@@ -81,21 +91,46 @@ int main(int argc, char**argv)
     }
 
     try {
+        SentinelOptions sentinelOptions;
         ConnectionOptions options;
-        options.host = redisHost;
-        options.port = redisPort;
-        auto passwd = getenv(redisAuthEnvVar.c_str());
-        if (!passwd) {
-            logger->error("Unable to get auth password");
-            exit(1);
-        }
-        options.password = passwd;
+        std::shared_ptr<Sentinel> sentinel;
+        std::shared_ptr<Redis> redis;
         ConnectionPoolOptions poolOptions;
-        poolOptions.size = 3;
+        poolOptions.size = conSize;
+        if (doAuth) {
+            auto passwd = getenv(redisAuthEnvVar.c_str());
+            if (!passwd) {
+                logger->error("Unable to get auth password");
+                exit(1);
+            }
+            options.password = passwd;
+        }
 
-        auto redis = Redis(options, poolOptions);
-        Scheduler scheduler(redis,"scheduler",dispatcher,worker);
+        if (sentinelPorts.size()) {
+            // Connect to Sentinel
+            for (const auto &port: sentinelPorts) {
+                sentinelOptions.nodes.push_back({redisHost, port});
+            }
+            sentinelOptions.connect_timeout = std::chrono::milliseconds(500);
+            sentinelOptions.socket_timeout = std::chrono::milliseconds(500);
+
+            sentinel = std::make_shared<Sentinel>(sentinelOptions);
+
+
+            options.connect_timeout = std::chrono::milliseconds(500);
+            options.socket_timeout = std::chrono::milliseconds(500);
+
+            redis = std::make_shared<Redis>(sentinel, "mymaster", Role::MASTER, options, poolOptions);
+        } else {
+            // Connect to Redis master
+            options.host = redisHost;
+            options.port = redisPort;
+
+            redis = std::make_shared<Redis>(options, poolOptions);
+        }
         std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        Scheduler scheduler(redis,"scheduler",dispatcher,worker);
 
         uint32_t eventCount = 0; 
 

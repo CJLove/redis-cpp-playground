@@ -8,14 +8,14 @@
 
 class Dispatcher {
 public: 
-    Dispatcher(sw::redis::Redis &redis, const std::string &keyPrefix);
+    Dispatcher(std::shared_ptr<sw::redis::Redis> redis, const std::string &keyPrefix);
 
     virtual ~Dispatcher();
 
 private:
     void run();
     
-    sw::redis::Redis &m_redis;
+    std::shared_ptr<sw::redis::Redis> m_redis;
 
     std::shared_ptr<spdlog::logger> m_logger;
 

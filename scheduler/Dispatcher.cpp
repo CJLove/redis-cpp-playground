@@ -1,7 +1,7 @@
 #include "Dispatcher.h"
 
 
-Dispatcher::Dispatcher(sw::redis::Redis &redis, const std::string &keyPrefix):
+Dispatcher::Dispatcher(std::shared_ptr<sw::redis::Redis> redis, const std::string &keyPrefix):
     m_redis(redis),
     m_logger(spdlog::get("scheduler")),
     m_schedulerKey(keyPrefix+"Zset"),
@@ -26,12 +26,12 @@ Dispatcher::run()
     m_running = true;
     m_logger->info("Starting Dispatcher thread");
 
-    auto tx = m_redis.transaction();
-    auto txRedis = tx.redis();
-
     while (m_running.load())
     {
         try {
+            auto tx = m_redis->transaction(false,false);
+            auto txRedis = tx.redis();
+
             txRedis.watch(m_schedulerKey);
 
             double minScore = 0;
@@ -49,8 +49,14 @@ Dispatcher::run()
             }
         } catch (const sw::redis::WatchError &err) {
             continue;
-        } catch (const sw::redis::Error &err) {
-            m_logger->error("Exception {}", err.what());
+        } 
+        catch (sw::redis::TimeoutError &e) {
+            m_logger->error("Dispatcher::run() TimeoutError Exception {}", e.what());
+
+            continue;
+        }
+        catch (const sw::redis::Error &err) {
+            m_logger->error("Dispatcher::run() Exception {}", err.what());
         }
     }
     m_logger->info("Exiting Dispatcher thread");

@@ -72,10 +72,13 @@ int main(int argc, char**argv)
     int logLevel = spdlog::level::trace;
     std::string redisHost ("127.0.0.1");
     uint16_t redisPort = 6379;
+    bool doAuth = false;
     std::string redisAuthEnvVar ("REDIS_PASSWORD");
+    std::vector<uint16_t> sentinelPorts;
+    int conSize = 5;
     int c;
 
-    while ((c = getopt(argc,argv, "h:p:e:l:?")) != EOF) {
+    while ((c = getopt(argc,argv, "h:p:e:l:c:s:?")) != EOF) {
         switch (c) {
             case 'h':
                 redisHost = optarg;
@@ -85,6 +88,13 @@ int main(int argc, char**argv)
                 break;
             case 'e':
                 redisAuthEnvVar = optarg;
+                doAuth = true;
+                break;
+            case 's':
+                sentinelPorts.push_back(static_cast<uint16_t>(std::stoi(optarg)));
+                break;
+            case 'c':
+                conSize = static_cast<int>(std::stoi(optarg));
                 break;
             case 'l':
                 logLevel = std::stoi(optarg);
@@ -100,22 +110,48 @@ int main(int argc, char**argv)
     spdlog::set_level(static_cast<spdlog::level::level_enum>(logLevel));
 
     try {
+        SentinelOptions sentinelOptions;
         ConnectionOptions options;
-        options.host = redisHost;
-        options.port = redisPort;
-        auto passwd = getenv(redisAuthEnvVar.c_str());
-        if (!passwd) {
-            logger->error("Unable to get auth password");
-            exit(1);
+        std::shared_ptr<Sentinel> sentinel;
+        std::shared_ptr<Redis> redis;
+        ConnectionPoolOptions poolOptions;
+        poolOptions.size = conSize;
+        if (doAuth) {
+            auto passwd = getenv(redisAuthEnvVar.c_str());
+            if (!passwd) {
+                logger->error("Unable to get auth password");
+                exit(1);
+            }
+            options.password = passwd;
         }
-        options.password = passwd; 
 
-        auto redis = Redis(options);
+        if (sentinelPorts.size()) {
+            // Connect to Sentinel
+            for (const auto &port: sentinelPorts) {
+                sentinelOptions.nodes.push_back({redisHost, port});
+            }
+            sentinelOptions.connect_timeout = std::chrono::milliseconds(500);
+            sentinelOptions.socket_timeout = std::chrono::milliseconds(500);
+
+            sentinel = std::make_shared<Sentinel>(sentinelOptions);
+
+
+            options.connect_timeout = std::chrono::milliseconds(500);
+            options.socket_timeout = std::chrono::milliseconds(500);
+
+            redis = std::make_shared<Redis>(sentinel, "mymaster", Role::MASTER, options, poolOptions);
+        } else {
+            // Connect to Redis master
+            options.host = redisHost;
+            options.port = redisPort;
+
+            redis = std::make_shared<Redis>(options, poolOptions);
+        }
 
         // Set hash:1 field to a single string value
         auto key1 = "hash:1";
 
-        redis.hset(key1,"field1","field1Val");
+        redis->hset(key1,"field1","field1Val");
         logger->info("Logged single-value hash {}", key1);
 
         // Set hash:2 field with a pair of values
@@ -124,12 +160,12 @@ int main(int argc, char**argv)
             { "field1", "val1" },
             { "field2", "val2" }
         };
-        redis.hmset(key2,v2.begin(), v2.end());
+        redis->hmset(key2,v2.begin(), v2.end());
         logger->info("Logged multi-value hash {}", key2);
 
         // Retrieve all keys for hash:2
         std::unordered_map<std::string, std::string> fields;
-        redis.hgetall(key2, std::inserter(fields, fields.end()));
+        redis->hgetall(key2, std::inserter(fields, fields.end()));
         logger->info("Retrieved multi-value hash values for {}", key2);
         for (const auto &field: fields) {
             logger->info("  {}: {}", field.first, field.second);
@@ -148,11 +184,11 @@ int main(int argc, char**argv)
         logger->info("hashFields[msg1].size() {}", hashFields["msg1"].size());
         logger->info("hashFields[msg1].size() {}", hashFields["msg2"].size());
         auto key3 = "hash:3";
-        redis.hmset(key3,hashFields.begin(), hashFields.end());
+        redis->hmset(key3,hashFields.begin(), hashFields.end());
         logger->info("Stored multi-value hash values for {}", key3);
 
         std::unordered_map<std::string, std::string> fields2;
-        redis.hgetall(key3, std::inserter(fields2, fields2.end()));
+        redis->hgetall(key3, std::inserter(fields2, fields2.end()));
         logger->info("Retrieved multi-value hash values for {}", key3);
         logger->info("hashFields[msg1].size() {}", fields2["msg1"].size());
         logger->info("hashFields[msg1].size() {}", fields2["msg2"].size());

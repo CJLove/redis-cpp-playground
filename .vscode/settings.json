@@ -67,7 +67,9 @@
         "regex": "cpp",
         "charconv": "cpp",
         "unordered_set": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "format": "cpp",
+        "span": "cpp"
     },
     "cmake.configureOnOpen": false
 }

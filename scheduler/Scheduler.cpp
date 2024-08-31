@@ -1,7 +1,7 @@
 #include "Scheduler.h"
 
 
-Scheduler::Scheduler(sw::redis::Redis &redis, const std::string &keyPrefix, bool dispatcher, bool worker):
+Scheduler::Scheduler(std::shared_ptr<sw::redis::Redis> redis, const std::string &keyPrefix, bool dispatcher, bool worker):
     m_redis(redis),
     m_logger(spdlog::get("scheduler")),
     m_schedulerKey(keyPrefix+"Zset"),
@@ -29,8 +29,13 @@ void Scheduler::scheduleEvent(const std::string &eventId, uint32_t , uint32_t in
     now += interval;
     double score = static_cast<double>(now + interval);
 
-    m_logger->info("Now {} Scheduling event {} for time {}", now, eventId, score);
-    m_redis.zadd(m_schedulerKey, eventId, score);
+    try {
+        m_logger->info("Now {} Scheduling event {} for time {}", now, eventId, score);
+        m_redis->zadd(m_schedulerKey, eventId, score);
+    }
+    catch (std::exception &e) {
+        m_logger->error("scheduleEvent() caught {}", e.what());
+    }
 }
 
 
