@@ -33,16 +33,19 @@ Dispatcher::run()
             auto txRedis = tx.redis();
 
             txRedis.watch(m_schedulerKey);
+            m_logger->info("watch() returned");
 
             double minScore = 0;
             double maxScore = static_cast<double>(time(nullptr));
             std::vector<std::pair<std::string, double>> zset_result;
             txRedis.zrangebyscore(m_schedulerKey, sw::redis::BoundedInterval<double>(minScore, maxScore, sw::redis::BoundType::CLOSED), std::back_inserter(zset_result));
 
+            m_logger->info("zrangebyscore() returned");
             if (!zset_result.empty()) {
                 auto replies = tx.rpush(m_queueKey, zset_result[0].first)
                                  .zrem(m_schedulerKey, zset_result[0].first)
                                  .exec();
+                m_logger->info("replies.size()={}", replies.size());
                 //m_logger->info("Dispatcher() moving elt {} to queue", zset_result[0].first);
                 // Expect both steps of transaction to return 1
                 //m_logger->info("Transaction {} {}", replies.get<long long>(0), replies.get<long long>(1));

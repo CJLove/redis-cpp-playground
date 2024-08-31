@@ -48,3 +48,5 @@ add_subdirectory(hash)
 add_subdirectory(zset)
 
 add_subdirectory(scheduler)
+
+add_subdirectory(redlock)
