@@ -50,3 +50,5 @@ add_subdirectory(zset)
 add_subdirectory(scheduler)
 
 add_subdirectory(redlock)
+
+add_subdirectory(store)
